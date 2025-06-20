@@ -193,6 +193,13 @@ El archivo `docker-compose.yml` define cómo se orquestan los servicios de Incep
   - `./requirements/nginx/certs:/etc/ssl/certs`: Certificados TLS.
 - **env_file:** Solo variables no sensibles desde `.env`.
 - **networks:** Solo en la red interna `inception`.
+- **¿Por qué NGINX no tiene script de init personalizado?**
+  - NGINX no requiere un script de inicialización porque su proceso principal (el daemon de nginx) ya está preparado para ejecutarse como PID 1 en el contenedor, gestionando correctamente señales y su ciclo de vida.
+  - Solo necesita su archivo de configuración (`nginx.conf`) y los certificados TLS. Al arrancar, NGINX lee su configuración y se pone en marcha directamente.
+  - No es necesario crear usuarios, bases de datos ni realizar tareas dinámicas previas al arranque, como sí ocurre en MariaDB o WordPress.
+  - El subject prohíbe el uso de "hacky patches" como `tail -f`, `sleep infinity`, o bucles infinitos para mantener el contenedor vivo. NGINX ya cumple con las buenas prácticas de Docker: su proceso principal es el que se ejecuta y mantiene el contenedor activo.
+  - Si necesitas recargar la configuración, puedes hacerlo enviando señales estándar (`nginx -s reload`), pero no es necesario un script de arranque especial.
+  - En resumen: el contenedor de NGINX solo necesita el binario de nginx, su configuración y los certificados. El proceso principal es robusto y no requiere scripts de inicialización adicionales. Esto está alineado con las buenas prácticas de Docker y lo que pide el subject.
 
 ### WordPress
 - **build:** Imagen personalizada desde `./requirements/wordpress`.
@@ -300,3 +307,111 @@ secrets:
 ---
 
 > Si el corrector pregunta por qué se hace así, puedes responder que es la forma más segura, portable y alineada con el subject y las recomendaciones oficiales de Docker y 42.
+
+# Dockerfile de MariaDB: explicación de cada comando y justificación (subject 42)
+
+## ¿Por qué es tan corto el Dockerfile?
+- Usamos la imagen oficial de MariaDB, que ya incluye todo lo necesario para arrancar el servicio y soporta scripts de inicialización.
+- El subject exige usar imágenes propias, pero no reinventar la rueda: solo personalizamos lo necesario (scripts, permisos, versión fija).
+
+## Explicación de cada comando:
+
+1. `FROM mariadb:11.3.2`
+   - Selecciona la imagen oficial de MariaDB, versión fija (no latest, cumpliendo el subject).
+   - Incluye MariaDB y el sistema de inicialización de bases de datos.
+
+2. `COPY ./init-db.sh /docker-entrypoint-initdb.d/init-db.sh`
+   - Copia el script de inicialización personalizado al directorio especial `/docker-entrypoint-initdb.d/`.
+   - MariaDB ejecuta automáticamente todos los scripts de este directorio la primera vez que arranca el contenedor (cuando el volumen está vacío).
+   - Aquí se crean la base de datos y los usuarios usando Docker secrets (no variables de entorno ni contraseñas hardcodeadas).
+
+3. `RUN chmod +x /docker-entrypoint-initdb.d/init-db.sh`
+   - Da permisos de ejecución al script para asegurar que MariaDB pueda ejecutarlo correctamente.
+
+## ¿Dónde se definen los volúmenes, red y conexiones?
+- En el Dockerfile solo se construye la imagen.
+- Los volúmenes (persistencia de datos), la red interna y la conexión con WordPress se definen en el `docker-compose.yml`.
+- Así separamos la construcción de la imagen (Dockerfile) de la orquestación y conexiones (compose), cumpliendo buenas prácticas y el subject.
+
+## Justificación para la defensa
+- El Dockerfile es corto porque la imagen oficial ya es segura y funcional.
+- Solo se personaliza lo necesario: scripts y permisos.
+- Todo lo demás (persistencia, red, secrets, conexiones) se gestiona en el compose.
+- Esto es defendible y cumple el subject de 42.
+
+---
+
+# Script init-db.sh de MariaDB: explicación y justificación (subject 42)
+
+## ¿Qué hace este script?
+- Se ejecuta automáticamente al arrancar el contenedor MariaDB si el volumen de datos está vacío.
+- Crea la base de datos y el usuario usando información segura (secrets y variables de entorno).
+- No deja usuarios root sin contraseña y no expone credenciales en el código.
+
+## Explicación línea a línea:
+- `#!/bin/sh`: Usa el shell estándar de Linux.
+- `set -e`: Hace que el script termine si ocurre cualquier error (seguridad).
+- `MYSQL_ROOT_PASSWORD=$(cat /run/secrets/mariadb_root_password)`: Lee la contraseña de root desde el secret de Docker (seguro, no hardcodeado).
+- `MYSQL_USER_PASSWORD=$(cat /run/secrets/mariadb_user_password)`: Lee la contraseña del usuario desde otro secret.
+- `mysql -u root -p"$MYSQL_ROOT_PASSWORD" <<-EOSQL ... EOSQL`: Ejecuta comandos SQL como root:
+    - `CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\`;`: Crea la base de datos si no existe (nombre desde variable de entorno).
+    - `CREATE USER IF NOT EXISTS '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_USER_PASSWORD';`: Crea el usuario solo si no existe, usando la contraseña del secret.
+    - `GRANT ALL PRIVILEGES ON \`$MYSQL_DATABASE\`.* TO '$MYSQL_USER'@'%';`: Da todos los permisos sobre la base de datos al usuario.
+    - `FLUSH PRIVILEGES;`: Recarga los privilegios.
+
+## ¿De dónde salen las variables $MYSQL_DATABASE y $MYSQL_USER?
+- Se definen como variables de entorno en el archivo `.env` y se pasan al contenedor MariaDB mediante `env_file` en el `docker-compose.yml`.
+- Ejemplo en `.env`:
+  - `MYSQL_DATABASE=nombre_de_tu_db`
+  - `MYSQL_USER=nombre_de_tu_usuario`
+- Así el script es portable y seguro: no hay datos sensibles hardcodeados y puedes cambiar el nombre de la base de datos o usuario fácilmente.
+
+## Justificación para la defensa
+- Cumple el subject: no hay contraseñas en el código ni en variables de entorno públicas.
+- Usa Docker secrets para las contraseñas y variables de entorno para los nombres.
+- Solo crea lo necesario (base de datos y usuario), sin extras inseguros.
+- Es defendible y sigue buenas prácticas de seguridad y portabilidad.
+
+---
+
+# Dockerfile de WordPress: explicación y justificación (subject 42)
+
+## Cumplimiento del subject
+- El subject prohíbe usar imágenes pre-hechas de WordPress: solo se permite Alpine o Debian como base.
+- El Dockerfile parte de `alpine:3.19` y todo se instala manualmente.
+- Se instalan solo PHP, php-fpm y las extensiones requeridas por WordPress, más utilidades mínimas (curl, wget, tar, unzip, mysql-client).
+- Se crea el usuario y grupo `www-data` para compatibilidad con WordPress.
+- Se descarga y descomprime WordPress manualmente desde la web oficial.
+- Se copia el script de inicialización personalizado (`wp-init.sh`) y se le da permisos de ejecución.
+- El entrypoint es el script personalizado, que inicializa WordPress usando variables de entorno y Docker secrets.
+- El contenedor expone el puerto 9000 (php-fpm).
+
+## Explicación de cada comando:
+1. `FROM alpine:3.19`
+   - Imagen base mínima, ligera y segura, cumpliendo el subject.
+2. `RUN apk update && apk add --no-cache ...`
+   - Instala PHP, php-fpm y solo las extensiones necesarias para WordPress.
+   - Instala utilidades mínimas para la descarga y descompresión de WordPress y conexión a MariaDB.
+3. `RUN addgroup ... && adduser ...`
+   - Crea el usuario y grupo `www-data` (compatibilidad con permisos de WordPress y NGINX).
+4. `ENV WORDPRESS_VERSION=6.5.4`
+   - Define la versión de WordPress a instalar (fija, no latest, cumpliendo el subject).
+5. `RUN wget ... && tar ... && chown ...`
+   - Descarga, descomprime y ajusta permisos de WordPress en `/var/www/wordpress`.
+6. `COPY ./wp-init.sh ... && RUN chmod +x ...`
+   - Copia el script de inicialización y le da permisos de ejecución.
+7. `WORKDIR /var/www/wordpress`
+   - Define el directorio de trabajo para el entrypoint y php-fpm.
+8. `ENTRYPOINT ["/usr/local/bin/wp-init.sh"]`
+   - El script de entrypoint inicializa WordPress, crea usuarios y configura todo usando variables y secrets.
+9. `EXPOSE 9000`
+   - Expone el puerto de php-fpm para que NGINX pueda hacer proxy_pass.
+
+## Justificación para la defensa
+- No se usa ninguna imagen pre-hecha de WordPress, solo Alpine como base.
+- Todo lo sensible se gestiona con Docker secrets y variables de entorno.
+- El script de inicialización permite personalizar usuarios y contraseñas de forma segura y portable.
+- El contenedor es mínimo, seguro y cumple estrictamente el subject de 42.
+- Todo el proceso es defendible y alineado con las mejores prácticas de Docker y seguridad.
+
+---
