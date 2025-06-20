@@ -1,0 +1,302 @@
+Ayuda para el proyecto Inception - Planificación paso a paso
+
+1. Leer y entender los puntos clave del subject:
+   - Estructura de carpetas y archivos obligatoria.
+   - Servicios requeridos: NGINX (TLS), WordPress (php-fpm), MariaDB.
+   - Uso de Docker Compose, Dockerfiles propios, volúmenes, red personalizada.
+   - Seguridad: variables de entorno, secrets, sin credenciales en Dockerfiles.
+   - NGINX como único punto de entrada (puerto 443, TLSv1.2/1.3).
+   - Prohibiciones: latest tag, bucles infinitos, network: host, links, etc.
+   - Bonus solo si la parte obligatoria está perfecta.
+
+2. Crear la estructura de carpetas y archivos base:
+   - Makefile en la raíz.
+   - Carpeta srcs/ con docker-compose.yml y .env.
+   - Carpeta srcs/requirements/ con subcarpetas para nginx, mariadb, wordpress (cada una con su Dockerfile y config).
+   - Carpeta secrets/ para credenciales (ignoradas por git).
+
+3. Definir el docker-compose.yml:
+   - Declarar los servicios: nginx, wordpress, mariadb.
+   - Definir los volúmenes y la red personalizada.
+   - Configurar restart: always.
+   - Usar build context para cada servicio.
+   - Mapear los volúmenes a /home/login/data.
+
+4. Crear los Dockerfiles para cada servicio:
+   - nginx: desde Alpine/Debian, instalar nginx, configurar TLS, copiar certificados y config.
+   - wordpress: desde Alpine/Debian, instalar php-fpm y WordPress, configurar con variables de entorno.
+   - mariadb: desde Alpine/Debian, instalar y configurar MariaDB, usar variables de entorno y secrets.
+
+5. Configurar los archivos de configuración:
+   - nginx: configuración para proxy_pass a WordPress, solo puerto 443, TLSv1.2/1.3.
+   - wordpress: configuración para conectarse a MariaDB usando variables de entorno.
+   - mariadb: crear base de datos y usuarios desde scripts de inicialización.
+
+6. Crear el Makefile:
+   - Comandos para build, up, down, clean, etc., usando docker-compose.
+
+7. Crear y rellenar el archivo .env y los secrets:
+   - .env con variables no sensibles (dominio, usuario, etc.).
+   - secrets/ con contraseñas y credenciales (ignoradas por git).
+
+8. Probar el proyecto:
+   - Levantar los servicios y comprobar que todo funciona según el subject.
+   - Verificar acceso por dominio, HTTPS, usuarios de WordPress, etc.
+
+9. Preparar defensa:
+   - Repasar los puntos clave del subject.
+   - Saber explicar la estructura, la seguridad, el flujo de red, y las prohibiciones.
+
+10. (Opcional) Bonus:
+   - Solo si la parte obligatoria está perfecta, añadir servicios extra siguiendo el mismo esquema.
+
+# Consideraciones para trabajar en Inception desde Windows y 42 (Linux)
+
+## 1. Entorno de desarrollo
+- En casa (Windows):
+  - Puedes preparar toda la estructura de carpetas, archivos, Dockerfiles, Makefile y configuraciones.
+  - Puedes escribir y revisar el código, pero la ejecución y pruebas reales deben hacerse en una máquina virtual Linux (como exige el subject).
+  - Si tienes WSL2 (Windows Subsystem for Linux), puedes simular un entorno Linux y probar Docker Compose, pero no es idéntico a la VM de 42.
+
+- En 42 (Linux, entorno capado):
+  - Debes crear una VM (por ejemplo, con VirtualBox o UTM) con una distro ligera (Debian/Alpine recomendado).
+  - Instala Docker y Docker Compose dentro de la VM.
+  - Copia tu proyecto a la VM y haz todas las pruebas y builds ahí.
+
+## 2. Recomendaciones prácticas
+- Desarrolla y versiona el código en tu máquina local (Windows), pero no olvides probar todo en la VM antes de entregar.
+- Usa scripts o Makefile para automatizar el copiado de archivos a la VM si es posible.
+- Ten en cuenta las diferencias de rutas y permisos entre Windows y Linux.
+- No uses rutas absolutas de Windows en los archivos de configuración.
+- Recuerda que los volúmenes deben mapearse a `/home/login/data` en la VM.
+
+## 3. Siguiente paso sugerido
+- Prepara la estructura de carpetas y archivos base en tu proyecto local.
+- Cuando tengas acceso a la VM, copia el proyecto y realiza las pruebas.
+
+# ¿Para qué sirve la carpeta secrets?
+
+La carpeta `secrets` está destinada a almacenar archivos con información sensible, como contraseñas, credenciales, claves de base de datos, etc. Estos archivos deben ser ignorados por git (añadidos a `.gitignore`) para evitar que datos privados o críticos se suban al repositorio.
+
+En el contexto del proyecto Inception, aquí puedes guardar:
+- Contraseñas de la base de datos (por ejemplo, `db_password.txt`, `db_root_password.txt`).
+- Credenciales de usuarios (por ejemplo, `credentials.txt`).
+- Cualquier otro secreto necesario para la configuración de los servicios.
+
+Docker puede usar estos archivos como "Docker secrets" para inyectar información sensible en los contenedores de forma segura, evitando que aparezcan en los Dockerfiles o en el código fuente.
+
+**Resumen:**
+- Seguridad: nunca subas estos archivos a git.
+- Práctica recomendada: usa la carpeta `secrets` para todo lo que no deba ser público.
+- Cumple con el subject: es obligatorio no exponer contraseñas ni credenciales en el código ni en los Dockerfiles.
+
+# ¿Por dónde empezar con los archivos base?
+
+## Orden recomendado:
+
+1. **Makefile** (en la raíz de inception):
+   - Es obligatorio y será el punto de entrada para construir y levantar todo el proyecto.
+   - Debe contener comandos para build, up, down, clean, etc., usando docker-compose.
+
+2. **docker-compose.yml** (en inception/srcs):
+   - Define los servicios, volúmenes, red y cómo se construye cada contenedor.
+   - Es el corazón de la orquestación de los servicios.
+
+3. **.env** (en inception/srcs):
+   - Guarda variables de entorno no sensibles (dominio, usuario, etc.).
+   - Facilita la configuración y evita hardcodear valores en los archivos.
+
+4. **Dockerfiles** (uno por servicio, en inception/srcs/requirements/nginx, mariadb, wordpress):
+   - Cada servicio debe tener su propio Dockerfile personalizado.
+   - Aquí se define cómo se construye cada imagen desde Alpine/Debian.
+
+5. **Archivos de configuración** (nginx.conf, scripts de init de MariaDB, etc.):
+   - Se colocan en subcarpetas de cada servicio.
+   - Permiten personalizar el comportamiento de cada contenedor.
+
+6. **Archivos de secrets** (en inception/secrets):
+   - Contraseñas y credenciales, ignorados por git.
+
+---
+
+# Esqueleto detallado de archivos base
+
+## Makefile
+- Permite construir, levantar, bajar y limpiar los servicios con comandos simples.
+- Usa docker-compose con el archivo y entorno correctos.
+- Comandos principales: build, up, down, clean, fclean, re.
+
+## docker-compose.yml
+- Define los servicios nginx, wordpress y mariadb.
+- Cada uno usa su propio Dockerfile (build context).
+- Volúmenes:
+  - wp_data: para los archivos de WordPress.
+  - db_data: para la base de datos MariaDB.
+  - Ambos mapeados a /home/${LOGIN}/data en la VM.
+- Red personalizada: inception.
+- Uso de secrets para las contraseñas de MariaDB.
+- Uso de env_file para cargar variables de entorno.
+- NGINX expone solo el puerto 443.
+
+## .env
+- Variables de entorno para todos los servicios.
+- LOGIN y DOMAIN_NAME para personalizar el dominio y rutas.
+- Variables de MariaDB y WordPress.
+- No incluir contraseñas reales aquí, solo valores de ejemplo.
+
+---
+
+# Documentación sobre el uso de logins personalizados en .env y WordPress
+
+- Para cumplir el subject, los nombres de usuario (admin y usuario normal) no deben contener 'admin', 'administrator' ni variantes.
+- Se recomienda usar tu login (ej: josorteg) o combinaciones como josorteg_admin, josorteg_wp, etc.
+- En el archivo .env.example se han puesto ejemplos seguros:
+  - WP_ADMIN_USER=josorteg_admin
+  - WP_USER=josorteg_user
+  - MYSQL_USER=josorteg_wp
+- Así evitas cualquier problema en la defensa y demuestras que entiendes el requisito de seguridad del subject.
+- Las contraseñas nunca deben ir en el .env, solo en la carpeta secrets/.
+
+# Criterio de seguridad para nombres de usuario
+- No debe aparecer 'admin', 'administrator' ni variantes en ningún usuario de ningún servicio (WordPress, MariaDB, etc.), según el subject.
+- Se recomienda usar combinaciones únicas, como tu login y números primos (ej: josorteg_357, josorteg_2357).
+- Esto evita suspensos automáticos en la corrección y demuestra atención a los requisitos de seguridad.
+- El archivo .env y .env.example han sido actualizados para reflejar este criterio.
+
+# Conclusión importante
+- Todas las conclusiones, buenas prácticas y decisiones tomadas durante el desarrollo se están documentando en este archivo AyudaGPT.txt.
+- Así tendrás un registro completo para repasar, defender y justificar cada parte del proyecto en la corrección.
+- Si surge cualquier duda o cambio relevante, se añadirá aquí para mantener la trazabilidad y facilitar la defensa.
+
+**Siguiente paso sugerido:**
+Crear los Dockerfiles base para nginx, wordpress y mariadb, y las carpetas de configuración necesarias.
+
+¿Quieres que te ayude a crear los Dockerfiles y la estructura de configuración para cada servicio?
+
+# Guía de defensa y justificación: docker-compose.yml (Inception)
+
+## 1. Estructura general y propósito
+El archivo `docker-compose.yml` define cómo se orquestan los servicios de Inception (NGINX, WordPress, MariaDB), cumpliendo estrictamente el subject de 42 y aplicando buenas prácticas de seguridad y portabilidad.
+
+---
+
+## 2. Servicios
+
+### NGINX
+- **build:** Imagen personalizada desde `./requirements/nginx` para control total y seguridad.
+- **container_name:** Facilita la gestión y depuración.
+- **restart: always:** Alta disponibilidad.
+- **ports:** Solo expone el puerto 443 (HTTPS), cumpliendo que NGINX es el único punto de entrada.
+- **volumes:**
+  - `wp_data:/var/www/html`: Permite a NGINX servir los archivos de WordPress.
+  - `./requirements/nginx/conf:/etc/nginx/conf.d`: Configuración personalizada.
+  - `./requirements/nginx/certs:/etc/ssl/certs`: Certificados TLS.
+- **env_file:** Solo variables no sensibles desde `.env`.
+- **networks:** Solo en la red interna `inception`.
+
+### WordPress
+- **build:** Imagen personalizada desde `./requirements/wordpress`.
+- **container_name:** Gestión sencilla.
+- **restart: always:** Alta disponibilidad.
+- **depends_on:** Arranca solo cuando MariaDB está lista.
+- **volumes:**
+  - `wp_data:/var/www/html`: Persistencia de datos de WordPress (uploads, plugins, etc.).
+- **env_file:** Solo variables no sensibles.
+- **networks:** Solo en la red interna `inception`.
+
+### MariaDB
+- **build:** Imagen personalizada desde `./requirements/mariadb`.
+- **container_name:** Gestión sencilla.
+- **restart: always:** Alta disponibilidad.
+- **volumes:**
+  - `db_data:/var/lib/mysql`: Persistencia de la base de datos.
+- **env_file:** Solo variables no sensibles.
+- **secrets:** Contraseñas gestionadas de forma segura (ver sección 4).
+- **networks:** Solo en la red interna `inception`.
+
+---
+
+## 3. Volúmenes
+
+### ¿Por qué se usan?
+- **Persistencia:** Los datos sobreviven a reinicios o recreaciones de contenedores.
+- **Separación:** El código vive en la imagen, los datos en el volumen.
+- **Portabilidad:** Usar `${LOGIN}` permite que funcione en cualquier máquina/usuario.
+
+### ¿Cómo están definidos?
+```yaml
+volumes:
+  wp_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /home/${LOGIN}/data/wp_data
+      o: bind
+  db_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /home/${LOGIN}/data/db_data
+      o: bind
+```
+- **Bind mounts:** Los datos se almacenan en una ruta específica del host.
+- **driver_opts:** Recomendado por el subject para control y portabilidad.
+
+### ¿Qué guarda cada volumen?
+- **wp_data:** Archivos de WordPress (uploads, plugins, temas, etc.).
+- **db_data:** Datos de la base de datos MariaDB.
+
+---
+
+## 4. Secrets (Docker secrets)
+
+### ¿Qué es?
+- Es una funcionalidad oficial de Docker Compose para gestionar información sensible (contraseñas, claves, etc.).
+- Monta archivos secretos dentro del contenedor en `/run/secrets/`, accesibles solo para el proceso del contenedor.
+
+### ¿Por qué se usa?
+- **Cumple el subject:** No hay contraseñas en `.env` ni en el compose.
+- **Seguridad:** Los secretos no se suben al repositorio y solo existen localmente.
+- **Buenas prácticas:** Es la forma estándar y defendible de pasar información sensible.
+
+### Ejemplo en el compose:
+```yaml
+secrets:
+  db_root_password:
+    file: ../../secrets/db_root_password.txt
+  db_password:
+    file: ../../secrets/db_password.txt
+```
+
+---
+
+## 5. Variables de entorno y .env
+- El archivo `.env` debe estar en `srcs/` y contener solo variables NO sensibles (dominio, usuario, etc.), nunca contraseñas reales.
+- Las variables de `.env` pueden usarse en el propio compose (por ejemplo, `${LOGIN}` en rutas de volúmenes).
+- Es fundamental que `.env` esté presente y bien configurado antes de levantar los servicios.
+
+---
+
+## 6. Redes
+- Se usa una red bridge personalizada (`inception`) para aislar los servicios y cumplir el subject (no se usa host ni links).
+- Solo NGINX expone un puerto al exterior.
+
+---
+
+## 7. Portabilidad y corrección
+- Los datos y secretos nunca se suben al repositorio.
+- Al desplegar en la VM, hay que crear manualmente `.env` y la carpeta `secrets/` con los archivos necesarios.
+- Usar `${LOGIN}` y rutas absolutas facilita la portabilidad y la corrección en cualquier entorno.
+
+---
+
+## 8. Resumen de defensa
+- **No hay contraseñas ni datos sensibles en `.env` ni en el compose.**
+- **Los secretos se gestionan con Docker secrets, cumpliendo el subject y las mejores prácticas.**
+- **Los volúmenes aseguran persistencia y portabilidad.**
+- **Solo NGINX expone un puerto, cumpliendo el subject.**
+- **Todo es defendible y justificado según el subject y buenas prácticas de Docker.**
+
+---
+
+> Si el corrector pregunta por qué se hace así, puedes responder que es la forma más segura, portable y alineada con el subject y las recomendaciones oficiales de Docker y 42.

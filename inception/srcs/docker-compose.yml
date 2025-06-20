@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  nginx:
+    # build: Construye la imagen de nginx usando el Dockerfile en ./requirements/nginx
+    build: ./requirements/nginx
+    # container_name: Nombre explícito del contenedor (opcional, pero ayuda en la gestión)
+    container_name: nginx
+    # restart: always - El contenedor se reinicia automáticamente si falla (cumple subject)
+    restart: always
+    # ports: Expone solo el puerto 443 (HTTPS), cumpliendo que nginx es el único punto de entrada
+    ports:
+      - "443:443"
+    # volumes: Monta los volúmenes necesarios
+    #   - wp_data:/var/www/html: comparte los archivos de WordPress con nginx (cumple subject)
+    #   - ./requirements/nginx/conf:/etc/nginx/conf.d: monta la configuración personalizada de nginx
+    #   - ./requirements/nginx/certs:/etc/ssl/certs: monta los certificados TLS
+    volumes:
+      - wp_data:/var/www/html
+      - ./requirements/nginx/conf:/etc/nginx/conf.d
+      - ./requirements/nginx/certs:/etc/ssl/certs
+    # env_file: Carga variables de entorno desde .env (obligatorio en el subject)
+    env_file:
+      - .env
+    # networks: Conecta nginx a la red personalizada inception (cumple subject, no usar host ni links)
+    networks:
+      - inception
+
+  wordpress:
+    # build: Construye la imagen de WordPress usando el Dockerfile en ./requirements/wordpress
+    build: ./requirements/wordpress
+    # container_name: Nombre explícito del contenedor (opcional, pero ayuda en la gestión)
+    container_name: wordpress
+    # restart: always - El contenedor se reinicia automáticamente si falla (cumple subject)
+    restart: always
+    # depends_on: Espera a que mariadb esté listo antes de iniciar WordPress (importante para la conexión DB)
+    depends_on:
+      - mariadb
+    # volumes: Monta el volumen wp_data en /var/www/html para los archivos de WordPress (cumple subject)
+    volumes:
+      - wp_data:/var/www/html
+    # env_file: Carga variables de entorno desde .env (obligatorio en el subject)
+    env_file:
+      - .env
+    # networks: Conecta WordPress a la red personalizada inception (cumple subject, no usar host ni links)
+    networks:
+      - inception
+
+  mariadb:
+    # build: Construye la imagen de MariaDB usando el Dockerfile en ./requirements/mariadb
+    build: ./requirements/mariadb
+    # container_name: Nombre explícito del contenedor (opcional, pero ayuda en la gestión)
+    container_name: mariadb
+    # restart: always - El contenedor se reinicia automáticamente si falla (cumple subject)
+    restart: always
+    # volumes: Monta el volumen db_data en /var/lib/mysql para los datos de la base de datos (cumple subject)
+    volumes:
+      - db_data:/var/lib/mysql
+    # env_file: Carga variables de entorno desde .env (obligatorio en el subject)
+    env_file:
+      - .env
+    # secrets: Usa archivos de la carpeta secrets/ para las contraseñas (cumple subject, nunca en .env)
+    secrets:
+      - db_root_password
+      - db_password
+    # networks: Conecta MariaDB a la red personalizada inception (cumple subject, no usar host ni links)
+    networks:
+      - inception
+
+volumes:
+  wp_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /home/${LOGIN}/data/wp_data
+      o: bind
+  db_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /home/${LOGIN}/data/db_data
+      o: bind
+
+networks:
+  inception:
+    driver: bridge
+
+secrets:
+  db_root_password:
+    file: ../../secrets/db_root_password.txt
+  db_password:
+    file: ../../secrets/db_password.txt
+
+# Notas sobre el uso de .env en Inception y la portabilidad entre máquinas
+
+# - El archivo .env debe estar en srcs/ y contener solo variables NO sensibles (dominio, usuario, etc.), nunca contraseñas reales.
+# - Los secretos (contraseñas, etc.) deben ir en la carpeta secrets/, que no se sube a git ni a la web.
+# - Cuando subes el proyecto a una web (por ejemplo, para evaluación), solo subes el código y la estructura, nunca los secretos.
+# - Al bajar el proyecto en la máquina virtual, debes crear manualmente el archivo .env (si no está) y la carpeta secrets/ con los archivos necesarios.
+# - Si quieres automatizarlo, puedes añadir un ejemplo de .env (.env.example) y un README con instrucciones para copiarlo y rellenarlo en la VM.
+# - Si necesitas compartir archivos entre tu máquina y la VM, puedes usar una carpeta compartida, pero asegúrate de copiar el .env y los secrets a la ruta correcta dentro del proyecto antes de ejecutar el Makefile.
+
+# **Solución recomendada:**
+# - Incluye un .env.example en el repo con variables de ejemplo.
+# - Añade instrucciones en README para copiarlo a .env y rellenar los valores en la VM.
+# - Nunca subas el .env real ni los secrets a git.
+
+# Esto cumple el subject y facilita la portabilidad y la corrección en cualquier entorno.
+
+# ¿Quieres que te ayude a crear el .env.example y un README con instrucciones?
