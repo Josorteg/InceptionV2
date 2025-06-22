@@ -2,7 +2,7 @@
 # Script de inicialización para WordPress
 # Crea usuarios y configura WordPress usando variables de entorno y secrets
 
-set -e
+set -ex
 
 # Cargar secrets
 WP_ADMIN_PASSWORD=$(cat /run/secrets/wp_admin_password)
@@ -20,8 +20,7 @@ if ! wp core is-installed --allow-root; then
     wp user create "$WP_USER" "$WP_USER_EMAIL" --user_pass="$WP_USER_PASSWORD" --role=author --allow-root
 fi
 
-exec php-fpm
-
+exec php-fpm81 --nodaemonize
 # Notas:
 # - Usa secrets para las contraseñas.
 # - No crea usuarios "admin".
