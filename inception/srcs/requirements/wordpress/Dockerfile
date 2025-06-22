@@ -34,6 +34,7 @@ RUN apk update && apk add --no-cache \
     unzip \
     mysql-client
 
+RUN ln -sf /usr/bin/php81 /usr/bin/php
 # Crear usuario y grupo www-data (compatibilidad WordPress)
 RUN addgroup -g 82 -S www-data || true && adduser -u 82 -D -S -G www-data www-data
 RUN mkdir -p /var/www/html
