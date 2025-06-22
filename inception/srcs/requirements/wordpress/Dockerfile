@@ -49,7 +49,7 @@ RUN wget https://wordpress.org/wordpress-${WORDPRESS_VERSION}.tar.gz \
     && chown -R www-data:www-data /var/www/html
 
 WORKDIR /var/www/html
-RUN wget https://github.com/wp-cli/wp-cli/releases/download/v2.10.0/wp-cli-2.10.0.phar\
+RUN wget https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
     && chmod +x wp-cli.phar \
     && mv wp-cli.phar /usr/local/bin/wp
 RUN sed -i 's|listen = .*|listen = 0.0.0.0:9000|' /etc/php81/php-fpm.d/www.conf
