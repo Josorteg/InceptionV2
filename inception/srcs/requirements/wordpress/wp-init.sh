@@ -7,6 +7,7 @@ set -ex
 # Cargar secrets
 WP_ADMIN_PASSWORD=$(cat /run/secrets/wp_admin_password)
 WP_USER_PASSWORD=$(cat /run/secrets/wp_user_password)
+export MYSQL_PASSWORD=$(cat /run/secrets/db_password)
 
 # Esperar a que la base de datos esté lista
 until mysqladmin ping -h "$MARIADB_HOST" --silent; do
