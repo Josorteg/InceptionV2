@@ -3,9 +3,8 @@
 # Crea la base de datos y usuarios usando secrets y variables de entorno
 
 set -e
-
-MYSQL_ROOT_PASSWORD=$(cat /run/secrets/mariadb_root_password)
-MYSQL_USER_PASSWORD=$(cat /run/secrets/mariadb_user_password)
+MYSQL_ROOT_PASSWORD=$(cat /run/secrets/db_root_password)
+MYSQL_USER_PASSWORD=$(cat /run/secrets/db_password)
 
 # Crear base de datos y usuario si no existen
 mysql -u root -p"$MYSQL_ROOT_PASSWORD" <<-EOSQL
