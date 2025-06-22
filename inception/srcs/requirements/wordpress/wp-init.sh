@@ -14,6 +14,17 @@ until mysqladmin ping -h "$MARIADB_HOST" --silent; do
     sleep 2
 done
 
+# Crea wp-config.php si no existe
+if [ ! -f /var/www/html/wp-config.php ]; then
+  wp config create \
+    --path=/var/www/html \
+    --dbname="$MYSQL_DATABASE" \
+    --dbuser="$MYSQL_USER" \
+    --dbpass="$MYSQL_PASSWORD" \
+    --dbhost="$MARIADB_HOST" \
+    --allow-root
+fi
+
 # Instalar WordPress si no está instalado
 if ! wp core is-installed --allow-root; then
     wp core install --url="$DOMAIN_NAME" --title="$WP_TITLE" --admin_user="$WP_ADMIN_USER" --admin_password="$WP_ADMIN_PASSWORD" --admin_email="$WP_ADMIN_EMAIL" --skip-email --allow-root
