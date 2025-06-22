@@ -3,7 +3,7 @@
 NAME=inception
 # Variable que define el comando base para docker-compose, usando el archivo y entorno correctos
 COMPOSE=docker-compose -f srcs/docker-compose.yml --env-file srcs/.env
-
+LOGIN=josorteg
 # PHONY evita conflictos si existen archivos con el mismo nombre que los comandos
 .PHONY: all build up down clean fclean re
 
@@ -15,7 +15,7 @@ build:
 	$(COMPOSE) build
 
 # up: Levanta los servicios en segundo plano (detached)
-up:
+up: init_dirs
 	$(COMPOSE) up -d
 
 # down: Detiene y elimina los contenedores, pero mantiene los volúmenes
@@ -33,6 +33,12 @@ fclean: clean
 # re: Fuerza una limpieza total y vuelve a construir y levantar todo
 re: fclean all
 
+
+init_dirs:
+	mkdir -p /home/$(LOGIN)/data/wp_data
+	mkdir -p /home/$(LOGIN)/data/db_data
+	chmod 755 /home/$(LOGIN)/data/wp_data
+	chmod 755 /home/$(LOGIN)/data/db_data
 # Resumen de comandos docker y docker-compose usados en el Makefile
 
 # docker-compose build
@@ -64,5 +70,4 @@ re: fclean all
 # docker-compose exec [servicio] bash  # Entrar en un contenedor en ejecución
 # docker-compose ps                # Ver el estado de los servicios
 
----
 # Puedes añadir más comandos según necesidades

@@ -20,7 +20,7 @@ if ! wp core is-installed --allow-root; then
     wp user create "$WP_USER" "$WP_USER_EMAIL" --user_pass="$WP_USER_PASSWORD" --role=author --allow-root
 fi
 
-exec docker-entrypoint.sh php-fpm
+exec php-fpm
 
 # Notas:
 # - Usa secrets para las contraseñas.

@@ -35,20 +35,24 @@ RUN apk update && apk add --no-cache \
     mysql-client
 
 # Crear usuario y grupo www-data (compatibilidad WordPress)
-RUN addgroup -g 82 -S www-data && adduser -u 82 -D -S -G www-data www-data
+RUN addgroup -g 82 -S www-data || true && adduser -u 82 -D -S -G www-data www-data
+RUN mkdir -p /var/www/html
 
 # Descargar y descomprimir WordPress
 ENV WORDPRESS_VERSION=6.5.4
 RUN wget https://wordpress.org/wordpress-${WORDPRESS_VERSION}.tar.gz \
     && tar -xzf wordpress-${WORDPRESS_VERSION}.tar.gz -C /var/www/ \
     && rm wordpress-${WORDPRESS_VERSION}.tar.gz \
-    && chown -R www-data:www-data /var/www/wordpress
+    && mv /var/www/wordpress/* /var/www/html/ \
+    && mv /var/www/wordpress/.* /var/www/html/ 2>/dev/null || true \
+    && rm -rf /var/www/wordpress \
+    && chown -R www-data:www-data /var/www/html
 
-# Copiar configuración personalizada y scripts
+WORKDIR /var/www/html
 COPY ./wp-init.sh /usr/local/bin/wp-init.sh
 RUN chmod +x /usr/local/bin/wp-init.sh
 
-WORKDIR /var/www/wordpress
+WORKDIR /var/www/html
 
 # Entrypoint personalizado para inicializar WordPress con variables y secrets
 ENTRYPOINT ["/usr/local/bin/wp-init.sh"]
